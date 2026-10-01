@@ -261,3 +261,35 @@ describe("QtiItem attributes", () => {
     expect(parsed.toolVersion).toBe("1");
   });
 });
+
+describe("QtiItem response mappings", () => {
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "it writes and parses a mapping in QTI %s",
+    (version) => {
+      const mapping = {
+        defaultValue: 0,
+        entries: [
+          { mapKey: "7", mappedValue: 1, caseSensitive: true },
+          { mapKey: "seven", mappedValue: 0.5, caseSensitive: false },
+        ],
+      };
+      const item = new QtiItem({ identifier: "i" });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        baseType: "string",
+        correctResponse: ["7"],
+        mapping,
+      });
+
+      const xml = item.buildXml({ version });
+      expect(xml).toContain(
+        version === QtiVersion.v3p0
+          ? '<qti-map-entry map-key="seven" mapped-value="0.5" case-sensitive="false"/>'
+          : '<mapEntry mapKey="seven" mappedValue="0.5" caseSensitive="false"/>',
+      );
+
+      const [parsed] = QtiItem.fromXmlString(xml).getResponseDeclarations();
+      expect(parsed.mapping).toEqual(mapping);
+    },
+  );
+});

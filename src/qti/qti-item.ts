@@ -43,11 +43,18 @@ export type PciInteraction = {
   class?: string;
 };
 
+export type ResponseMapping = {
+  defaultValue?: number;
+  entries: { mapKey: string; mappedValue: number; caseSensitive?: boolean }[];
+};
+
 export type ResponseDeclaration = {
   identifier: string;
   cardinality?: QtiCardinality;
   baseType?: QtiBaseType;
   correctResponse?: string[] | number[];
+  /** Scores individual responses, e.g. each accepted answer to a text entry. */
+  mapping?: ResponseMapping;
 };
 
 export type OutcomeDeclaration = {
@@ -172,11 +179,32 @@ export class QtiItem extends QtiElement {
         }
       }
 
+      const attrOf = (name: string) =>
+        isV21 ? toAttributeName(name, QtiVersion.v2p1) : name;
+      const mappingNode = $res.find(isV21 ? "mapping" : "qti-mapping").first();
+      const mapping: ResponseMapping | undefined = mappingNode.length
+        ? {
+            defaultValue: Number(
+              mappingNode.attr(attrOf("default-value")) ?? 0,
+            ),
+            entries: mappingNode
+              .find(isV21 ? "mapEntry" : "qti-map-entry")
+              .map((_, entry) => ({
+                mapKey: $(entry).attr(attrOf("map-key")) ?? "",
+                mappedValue: Number($(entry).attr(attrOf("mapped-value"))),
+                caseSensitive:
+                  $(entry).attr(attrOf("case-sensitive")) !== "false",
+              }))
+              .get(),
+          }
+        : undefined;
+
       item.addResponseDeclaration({
         identifier: responseId,
         cardinality,
         baseType,
         correctResponse,
+        mapping,
       });
     });
 
@@ -383,6 +411,20 @@ export class QtiItem extends QtiElement {
         const correctResponse = response.ele(el("qti-correct-response"));
         for (const value of responseDeclaration.correctResponse) {
           correctResponse.ele(el("qti-value")).txt(value.toString());
+        }
+      }
+      if (responseDeclaration.mapping?.entries.length) {
+        const mapping = response.ele(el("qti-mapping"), {
+          [attr("default-value")]: (
+            responseDeclaration.mapping.defaultValue ?? 0
+          ).toString(),
+        });
+        for (const entry of responseDeclaration.mapping.entries) {
+          mapping.ele(el("qti-map-entry"), {
+            [attr("map-key")]: entry.mapKey,
+            [attr("mapped-value")]: entry.mappedValue.toString(),
+            [attr("case-sensitive")]: (entry.caseSensitive ?? true).toString(),
+          });
         }
       }
     }

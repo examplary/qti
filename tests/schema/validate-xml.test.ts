@@ -127,6 +127,39 @@ describe.each(VERSIONS)("QTI %s assessment items", (version) => {
   );
 });
 
+describe.each(VERSIONS)("QTI %s response mappings", (version) => {
+  test(
+    "text-entry item with mapped answers",
+    async () => {
+      const item = new QtiItem({
+        identifier: "mapped-item",
+        title: "Arithmetic",
+        timeDependent: false,
+      });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        cardinality: "single",
+        baseType: "string",
+        correctResponse: ["7"],
+        mapping: {
+          entries: [
+            { mapKey: "7", mappedValue: 1 },
+            { mapKey: "seven", mappedValue: 1, caseSensitive: false },
+          ],
+        },
+      });
+      item.addItemBodyFromHtml("<p>What is 2 + 5?</p>");
+      item.addInteraction(
+        new TextEntryInteraction({ responseIdentifier: "RESPONSE" }),
+      );
+      item.addResponseProcessing(ResponseProcessingTemplate.MapResponse);
+
+      await expectValid(item.buildXml({ version }));
+    },
+    TIMEOUT,
+  );
+});
+
 describe.each(VERSIONS)("QTI %s extension attributes", (version) => {
   test(
     "item with tool info and extension attributes",
