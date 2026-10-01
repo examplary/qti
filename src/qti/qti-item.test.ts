@@ -293,3 +293,20 @@ describe("QtiItem response mappings", () => {
     },
   );
 });
+
+describe("QtiItem gap texts", () => {
+  test("it puts text and inline interactions in one paragraph", () => {
+    const first = new TextEntryInteraction({ responseIdentifier: "R1" });
+    const second = new TextEntryInteraction({ responseIdentifier: "R2" });
+    const item = new QtiItem({ identifier: "i" });
+    item.addInlineContent(["France: ", first, ", Spain: ", second]);
+    item.addSummedMapResponseProcessing(["R1", "R2"]);
+
+    const xml = item.buildXml();
+    expect(xml.replace(/\s+/g, " ")).toContain(
+      '<p> France: <qti-text-entry-interaction response-identifier="R1"/> , Spain: <qti-text-entry-interaction response-identifier="R2"/> </p>',
+    );
+    expect(xml).toContain('<qti-map-response identifier="R2"/>');
+    expect(item.getInteractions()).toEqual([first, second]);
+  });
+});

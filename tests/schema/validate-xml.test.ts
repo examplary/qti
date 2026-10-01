@@ -160,6 +160,42 @@ describe.each(VERSIONS)("QTI %s response mappings", (version) => {
   );
 });
 
+describe.each(VERSIONS)("QTI %s gap texts", (version) => {
+  test(
+    "text with two gaps, scored per gap",
+    async () => {
+      const item = new QtiItem({
+        identifier: "gap-item",
+        title: "Capitals",
+        timeDependent: false,
+      });
+      for (const [identifier, answer] of [
+        ["RESPONSE_1", "Paris"],
+        ["RESPONSE_2", "Madrid"],
+      ]) {
+        item.addResponseDeclaration({
+          identifier,
+          cardinality: "single",
+          baseType: "string",
+          correctResponse: [answer],
+          mapping: { entries: [{ mapKey: answer, mappedValue: 1 }] },
+        });
+      }
+      item.addInlineContent([
+        "The capital of <b>France</b> is ",
+        new TextEntryInteraction({ responseIdentifier: "RESPONSE_1" }),
+        " and of Spain ",
+        new TextEntryInteraction({ responseIdentifier: "RESPONSE_2" }),
+        ".",
+      ]);
+      item.addSummedMapResponseProcessing(["RESPONSE_1", "RESPONSE_2"]);
+
+      await expectValid(item.buildXml({ version }));
+    },
+    TIMEOUT,
+  );
+});
+
 describe.each(VERSIONS)("QTI %s extension attributes", (version) => {
   test(
     "item with tool info and extension attributes",

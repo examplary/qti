@@ -78,6 +78,10 @@ export type ItemBodyElement =
     }
   | {
       interaction: QtiInteraction;
+    }
+  | {
+      /** A paragraph of HTML with inline interactions in it, e.g. gaps in a text. */
+      inline: (string | QtiInteraction)[];
     };
 
 export class QtiItem extends QtiElement {
@@ -92,6 +96,7 @@ export class QtiItem extends QtiElement {
 
   protected responseDeclarations: Map<string, ResponseDeclaration> = new Map();
   protected responseProcessing: ResponseProcessingTemplate | null = null;
+  protected summedMappedResponses: string[] | null = null;
   protected outcomeDeclarations: Map<string, OutcomeDeclaration> = new Map();
   protected itemBodyElements: ItemBodyElement[] = [];
 
@@ -462,6 +467,16 @@ export class QtiItem extends QtiElement {
           itemBody.import(builder);
         }
       }
+      if ("inline" in element) {
+        const paragraph = itemBody.ele("p");
+        for (const part of element.inline) {
+          if (typeof part === "string") {
+            appendHtmlFragment(part, paragraph);
+          } else {
+            paragraph.import(part.getXmlBuilder(version));
+          }
+        }
+      }
     }
 
     // Response processing
@@ -473,6 +488,14 @@ export class QtiItem extends QtiElement {
       item.ele(el("qti-response-processing"), {
         template: templateUrl,
       });
+    } else if (this.summedMappedResponses?.length) {
+      const sum = item
+        .ele(el("qti-response-processing"))
+        .ele(el("qti-set-outcome-value"), { identifier: "SCORE" })
+        .ele(el("qti-sum"));
+      for (const identifier of this.summedMappedResponses) {
+        sum.ele(el("qti-map-response"), { identifier });
+      }
     }
 
     return item.end({ prettyPrint: true });
@@ -496,9 +519,15 @@ export class QtiItem extends QtiElement {
   }
 
   public getInteractions(): QtiInteraction[] {
-    return this.itemBodyElements
-      .filter((element) => "interaction" in element)
-      .map((element) => element.interaction);
+    return this.itemBodyElements.flatMap((element) => {
+      if ("interaction" in element) return [element.interaction];
+      if ("inline" in element) {
+        return element.inline.filter(
+          (part): part is QtiInteraction => typeof part !== "string",
+        );
+      }
+      return [];
+    });
   }
 
   public getResponseDeclarations(): ResponseDeclaration[] {
@@ -569,6 +598,20 @@ export class QtiItem extends QtiElement {
 
   public addResponseProcessing(template: ResponseProcessingTemplate) {
     this.responseProcessing = template;
+  }
+
+  /**
+   * Scores the item as the sum of the mapped values of several responses,
+   * e.g. one per gap in a text. Each response needs a `mapping`.
+   */
+  public addSummedMapResponseProcessing(responseIdentifiers: string[]) {
+    this.responseProcessing = null;
+    this.summedMappedResponses = responseIdentifiers;
+  }
+
+  /** Adds a paragraph of HTML with inline interactions, e.g. gaps in a text. */
+  public addInlineContent(parts: (string | QtiInteraction)[]) {
+    this.itemBodyElements.push({ inline: parts });
   }
 
   public addOutcomeDeclaration(
