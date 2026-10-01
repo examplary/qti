@@ -20,7 +20,7 @@ import {
  * conform to the official 1EdTech QTI / IMS Content Package XSDs?
  *
  * The first run downloads each root schema and its full import closure
- * (~19MB, cached under tests/schema/.cache for subsequent runs), and libxml2
+ * (~19MB, cached under node_modules/.schema_cache for subsequent runs), and libxml2
  * (via xmllint-wasm) compiles the QTI 3.0 ASI schema fresh per validation, so
  * these tests are slower than the rest of the suite.
  */

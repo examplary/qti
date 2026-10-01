@@ -19,7 +19,7 @@ export type SchemaClosure = {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Where downloaded + rewritten schema files are cached between runs. */
-const CACHE_DIR = join(__dirname, ".cache");
+const CACHE_DIR = join(__dirname, "..", "node_modules", ".schema_cache");
 
 /** In-memory cache so repeated validations in one run skip disk + network. */
 const memoryCache = new Map<string, Promise<SchemaClosure>>();
