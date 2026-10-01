@@ -55,7 +55,7 @@ export enum ImsManifestResourceType {
   "associatedcontent/learning-application-resource" = "associatedcontent/learning-application-resource",
 
   // Schema (XSD). Allows for packaging the XSD files needed to validate the files in the package as part of the package.
-  "controlfile" = "controlfile",
+  controlfile = "controlfile",
 
   // External IMS metadata
   "resourcemetadata/xml" = "resourcemetadata/xml",

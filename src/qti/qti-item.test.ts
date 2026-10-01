@@ -225,3 +225,39 @@ describe("QtiItem.fromXmlString", () => {
     expect(choice.choices?.[1].content).toBe("alleen ongeslachtelijk");
   });
 });
+
+describe("QtiItem attributes", () => {
+  test("it writes tool info in kebab-case for QTI 3.0 and camelCase for QTI 2.1", () => {
+    const item = new QtiItem({ identifier: "i", toolName: "Tool" });
+    expect(item.buildXml({ version: QtiVersion.v3p0 })).toContain(
+      'tool-name="Tool"',
+    );
+    expect(item.buildXml({ version: QtiVersion.v2p1 })).toContain(
+      'toolName="Tool"',
+    );
+  });
+
+  test("it round-trips extension attributes", () => {
+    const item = new QtiItem({ identifier: "i", toolName: "Tool" });
+    item.registerNamespace("ext", "https://example.com/qti-ext");
+    item.addNamespacedAttribute("ext", "type", "essay");
+    item.addNamespacedAttribute("ext", "settings", '{"a":"<b>"}');
+    item.addNamespacedAttribute("ext", "unset", undefined);
+
+    const parsed = QtiItem.fromXmlString(item.buildXml());
+    expect(parsed.getNamespacedAttributes("ext")).toEqual({
+      type: "essay",
+      settings: '{"a":"<b>"}',
+    });
+    expect(parsed.getNamespacedAttributes("other")).toEqual({});
+    expect(parsed.toolName).toBe("Tool");
+  });
+
+  test("it still reads the camelCase tool info of older packages", () => {
+    const parsed = QtiItem.fromXmlString(
+      `<qti-assessment-item identifier="i" toolName="Old" toolVersion="1"/>`,
+    );
+    expect(parsed.toolName).toBe("Old");
+    expect(parsed.toolVersion).toBe("1");
+  });
+});

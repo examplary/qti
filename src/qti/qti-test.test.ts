@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { QtiAssessmentSection } from "./qti-assessment-section";
 import { QtiTest } from "./qti-test";
 import { QtiTestPart } from "./qti-test-part";
+import { QtiVersion } from "./types";
 
 describe("QtiTest", () => {
   test("it creates a QTI test", () => {
@@ -138,5 +139,65 @@ describe("QtiTest.fromXmlString", () => {
     expect(parsed.identifier).toBe(original.identifier);
     expect(parsed.title).toBe(original.title);
     expect(parsed.language).toBe(original.language);
+  });
+});
+
+describe("QtiTest attributes", () => {
+  const buildTest = () => {
+    const qtiTest = new QtiTest({
+      identifier: "t",
+      title: "T",
+      toolName: "Tool",
+      toolVersion: "2.0",
+    });
+    const part = new QtiTestPart({ identifier: "P" });
+    part.addSection(
+      new QtiAssessmentSection({
+        identifier: "S",
+        title: "S",
+        keepTogether: false,
+      }),
+    );
+    qtiTest.addTestPart(part);
+    return qtiTest;
+  };
+
+  test("it writes QTI 3.0 attributes in kebab-case and QTI 2.1 in camelCase", () => {
+    const v3 = buildTest().buildXml({ version: QtiVersion.v3p0 });
+    expect(v3).toContain('tool-name="Tool"');
+    expect(v3).toContain('tool-version="2.0"');
+    expect(v3).toContain('keep-together="false"');
+
+    const v21 = buildTest().buildXml({ version: QtiVersion.v2p1 });
+    expect(v21).toContain('toolName="Tool"');
+    expect(v21).toContain('keepTogether="false"');
+  });
+
+  test("it round-trips extension attributes", () => {
+    const qtiTest = buildTest();
+    qtiTest.registerNamespace("ext", "https://example.com/qti-ext");
+    qtiTest.addNamespacedAttribute("ext", "source", "exam_1");
+
+    const xml = qtiTest.buildXml();
+    expect(xml).toContain('ext:source="exam_1"');
+
+    const parsed = QtiTest.fromXmlString(xml);
+    expect(parsed.getNamespacedAttributes("ext")).toEqual({
+      source: "exam_1",
+    });
+    expect(parsed.toolName).toBe("Tool");
+  });
+
+  test("it still reads the camelCase attributes of older packages", () => {
+    const parsed = QtiTest.fromXmlString(
+      `<qti-assessment-test identifier="t" title="T" toolName="Old" toolVersion="1">
+        <qti-test-part identifier="P">
+          <qti-assessment-section identifier="S" title="S" keepTogether="false"/>
+        </qti-test-part>
+      </qti-assessment-test>`,
+    );
+    expect(parsed.toolName).toBe("Old");
+    expect(parsed.toolVersion).toBe("1");
+    expect(parsed.buildXml()).toContain('keep-together="false"');
   });
 });

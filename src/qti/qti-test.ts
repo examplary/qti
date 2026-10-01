@@ -114,11 +114,9 @@ export class QtiTest extends QtiElement {
         title: $part.attr("title"),
         class: $part.attr("class"),
         navigationMode: ($part.attr("navigation-mode") || "linear") as
-          | "linear"
-          | "nonlinear",
+          "linear" | "nonlinear",
         submissionMode: ($part.attr("submission-mode") || "simultaneous") as
-          | "individual"
-          | "simultaneous",
+          "individual" | "simultaneous",
       });
 
       root.find("qti-assessment-section").each((_, sec) => {
@@ -180,7 +178,7 @@ export class QtiTest extends QtiElement {
     );
 
     // Extensions
-    this.appendNamespacesAndElements(test);
+    this.appendNamespacesAndElements(test, version);
 
     // Outcome declarations
     for (const outcomeDeclaration of this.outcomeDeclarations.values()) {

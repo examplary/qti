@@ -84,9 +84,4 @@ export type QtiBaseType =
   | "uri";
 
 export type QtiAudience =
-  | "author"
-  | "candidate"
-  | "proctor"
-  | "scorer"
-  | "testConstructor"
-  | "tutor";
+  "author" | "candidate" | "proctor" | "scorer" | "testConstructor" | "tutor";

@@ -369,7 +369,7 @@ export class QtiItem extends QtiElement {
     );
 
     // Extensions
-    this.appendNamespacesAndElements(item);
+    this.appendNamespacesAndElements(item, version);
 
     // Response declaration
     // Note: some implementations expect the response to be defined before the body

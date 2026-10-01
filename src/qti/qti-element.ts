@@ -1,5 +1,7 @@
 import { XMLBuilder } from "xmlbuilder2/lib/interfaces";
 
+import { QtiVersion } from "./types";
+
 export type NamespacedElementContent =
   | string
   | { [key: string]: NamespacedElementContent }
@@ -42,8 +44,9 @@ export abstract class QtiElement {
 
   /**
    * Adds an extension attribute (`prefix:name="value"`) to the root element.
-   * Unlike namespaced elements, these keep the document schema-valid: QTI
-   * allows attributes from any namespace on assessment items and tests.
+   * Unlike namespaced elements, these keep the document schema-valid: QTI 3.0
+   * allows attributes from any namespace on assessment items and tests. QTI
+   * 2.1 has no such extension point, so they are left out of 2.1 documents.
    */
   public addNamespacedAttribute(
     namespace: string,
@@ -82,13 +85,18 @@ export abstract class QtiElement {
     );
   }
 
-  protected appendNamespacesAndElements(element: XMLBuilder): void {
+  protected appendNamespacesAndElements(
+    element: XMLBuilder,
+    version: QtiVersion,
+  ): void {
     for (const [prefix, uri] of Object.entries(this.namespaces)) {
       element.att(`xmlns:${prefix}`, uri);
     }
 
+    const attributesByNamespace =
+      version === QtiVersion.v3p0 ? this.namespaceAttributes : {};
     for (const [namespace, attributes] of Object.entries(
-      this.namespaceAttributes,
+      attributesByNamespace,
     )) {
       for (const [name, value] of Object.entries(attributes)) {
         element.att(`${namespace}:${name}`, value);

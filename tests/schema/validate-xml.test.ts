@@ -127,6 +127,56 @@ describe.each(VERSIONS)("QTI %s assessment items", (version) => {
   );
 });
 
+describe.each(VERSIONS)("QTI %s extension attributes", (version) => {
+  test(
+    "item with tool info and extension attributes",
+    async () => {
+      const item = new QtiItem({
+        identifier: "extended-item",
+        title: "Extended",
+        timeDependent: false,
+        toolName: "Tool",
+        toolVersion: "2.0",
+      });
+      item.registerNamespace("ext", "https://example.com/qti-ext");
+      item.addNamespacedAttribute("ext", "settings", '{"a":1}');
+      item.addItemBodyFromHtml("<p>Read this.</p>");
+
+      const xml = item.buildXml({ version });
+      expect(xml.includes('ext:settings="')).toBe(version === QtiVersion.v3p0);
+      await expectValid(xml);
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "test with tool info and extension attributes",
+    async () => {
+      const qtiTest = new QtiTest({
+        identifier: "extended-test",
+        title: "Extended Test",
+        toolName: "Tool",
+        toolVersion: "2.0",
+      });
+      qtiTest.registerNamespace("ext", "https://example.com/qti-ext");
+      qtiTest.addNamespacedAttribute("ext", "source", "exam_1");
+      const part = new QtiTestPart({ identifier: "PART-1" });
+      const section = new QtiAssessmentSection({
+        identifier: "SEC-1",
+        title: "Section 1",
+        visible: true,
+        keepTogether: false,
+      });
+      section.addItemReference("extended-item", "extended-item.xml");
+      part.addSection(section);
+      qtiTest.addTestPart(part);
+
+      await expectValid(qtiTest.buildXml({ version }));
+    },
+    TIMEOUT,
+  );
+});
+
 describe.each(VERSIONS)("QTI %s assessment tests", (version) => {
   test(
     "test with a part, section and item reference",

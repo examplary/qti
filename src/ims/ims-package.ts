@@ -8,11 +8,7 @@ import {
 import { QtiVersion } from "../qti/types";
 
 export type ImsPackageFileData =
-  | Uint8Array
-  | ArrayBuffer
-  | string
-  | Blob
-  | NodeJS.ReadableStream;
+  Uint8Array | ArrayBuffer | string | Blob | NodeJS.ReadableStream;
 
 export type ImsPackageFileFromData = {
   filename: string;
