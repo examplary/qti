@@ -67,10 +67,12 @@ export class QtiTest extends QtiElement {
       identifier: root.attr("identifier"),
       title: root.attr("title"),
       language: root.attr("xml:lang"),
-      toolName: root.attr("toolName"),
-      toolVersion: root.attr("toolVersion"),
+      // Older packages wrote these in camelCase
+      toolName: root.attr("tool-name") ?? root.attr("toolName"),
+      toolVersion: root.attr("tool-version") ?? root.attr("toolVersion"),
       addDefaultOutcomes: false,
     });
+    test.readNamespacedAttributes(root.attr() ?? {});
 
     root.find("qti-outcome-declaration").each((_, el) => {
       const $out = $(el);
@@ -132,7 +134,9 @@ export class QtiTest extends QtiElement {
           class: $section.attr("class"),
           fixed: $section.attr("fixed") === "true",
           required: $section.attr("required") === "true",
-          keepTogether: $section.attr("keepTogether") !== "false",
+          keepTogether:
+            ($section.attr("keep-together") ??
+              $section.attr("keepTogether")) !== "false",
         });
 
         root.find("qti-assessment-item-ref").each((_, ref) => {
@@ -168,8 +172,8 @@ export class QtiTest extends QtiElement {
         "xsi:schemaLocation": config.schemaLocation,
         identifier: this.identifier,
         title: this.title,
-        toolName: this.toolName,
-        toolVersion: this.toolVersion,
+        [attr("tool-name")]: this.toolName,
+        [attr("tool-version")]: this.toolVersion,
         // The QTI 2.1 assessmentTest element does not permit xml:lang.
         "xml:lang": version === QtiVersion.v2p1 ? undefined : this.language,
       },
@@ -212,7 +216,7 @@ export class QtiTest extends QtiElement {
           visible: section.visible ? "true" : "false",
           fixed: section.fixed ? "true" : "false",
           required: section.required ? "true" : "false",
-          keepTogether: section.keepTogether ? "true" : "false",
+          [attr("keep-together")]: section.keepTogether ? "true" : "false",
         });
 
         // Item references

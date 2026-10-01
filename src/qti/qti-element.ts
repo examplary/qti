@@ -12,9 +12,13 @@ export type NamespacedElement = {
   attributes?: Record<string, string | undefined>;
 };
 
+/** Attribute prefixes that belong to XML itself rather than to an extension. */
+const RESERVED_PREFIXES = ["xml", "xmlns", "xsi"];
+
 export abstract class QtiElement {
   protected namespaces: Record<string, string> = {};
   protected namespaceElements: NamespacedElement[] = [];
+  protected namespaceAttributes: Record<string, Record<string, string>> = {};
 
   public abstract buildXml(): string;
 
@@ -36,6 +40,35 @@ export abstract class QtiElement {
     });
   }
 
+  /**
+   * Adds an extension attribute (`prefix:name="value"`) to the root element.
+   * Unlike namespaced elements, these keep the document schema-valid: QTI
+   * allows attributes from any namespace on assessment items and tests.
+   */
+  public addNamespacedAttribute(
+    namespace: string,
+    name: string,
+    value: string | undefined,
+  ): void {
+    if (value === undefined) return;
+    this.namespaceAttributes[namespace] ??= {};
+    this.namespaceAttributes[namespace][name] = value;
+  }
+
+  /** The extension attributes of one namespace, keyed by their local name. */
+  public getNamespacedAttributes(namespace: string): Record<string, string> {
+    return this.namespaceAttributes[namespace] ?? {};
+  }
+
+  /** Picks up the extension attributes of a parsed root element. */
+  protected readNamespacedAttributes(attributes: Record<string, string>) {
+    for (const [qualifiedName, value] of Object.entries(attributes)) {
+      const [prefix, name] = qualifiedName.split(":");
+      if (!name || RESERVED_PREFIXES.includes(prefix)) continue;
+      this.addNamespacedAttribute(prefix, name, value);
+    }
+  }
+
   public getNamespacedElements(): NamespacedElement[] {
     return this.namespaceElements;
   }
@@ -52,6 +85,14 @@ export abstract class QtiElement {
   protected appendNamespacesAndElements(element: XMLBuilder): void {
     for (const [prefix, uri] of Object.entries(this.namespaces)) {
       element.att(`xmlns:${prefix}`, uri);
+    }
+
+    for (const [namespace, attributes] of Object.entries(
+      this.namespaceAttributes,
+    )) {
+      for (const [name, value] of Object.entries(attributes)) {
+        element.att(`${namespace}:${name}`, value);
+      }
     }
 
     for (const nsElement of this.namespaceElements) {

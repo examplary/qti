@@ -130,9 +130,11 @@ export class QtiItem extends QtiElement {
       title: root.attr("title"),
       language: root.attr("xml:lang"),
       label: root.attr("label"),
-      toolName: root.attr("toolName"),
-      toolVersion: root.attr("toolVersion"),
+      // Older packages wrote these in camelCase, also in QTI 3.0
+      toolName: getAttr("tool-name") ?? root.attr("toolName"),
+      toolVersion: getAttr("tool-version") ?? root.attr("toolVersion"),
     });
+    item.readNamespacedAttributes(root.attr() ?? {});
 
     // Parse response declarations (both versions)
     const responseDeclSelector = isV21
@@ -360,8 +362,8 @@ export class QtiItem extends QtiElement {
         [attr("time-dependent")]: (this.timeDependent ?? false).toString(),
         label: this.label,
         title: this.title,
-        toolName: this.toolName || "Examplary QTI Module",
-        toolVersion: this.toolVersion || "1.0.0",
+        [attr("tool-name")]: this.toolName || "Examplary QTI Module",
+        [attr("tool-version")]: this.toolVersion || "1.0.0",
         "xml:lang": this.language,
       },
     );
