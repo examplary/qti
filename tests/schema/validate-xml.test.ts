@@ -8,6 +8,7 @@ import {
   ImsManifestResourceType,
   QtiAssessmentSection,
   QtiItem,
+  QtiStimulus,
   QtiTest,
   QtiTestPart,
   QtiVersion,
@@ -296,6 +297,48 @@ describe.each(VERSIONS)("QTI %s IMS manifests", (version) => {
       });
 
       await expectValid(manifest.buildXml(), { version });
+    },
+    TIMEOUT,
+  );
+});
+
+describe("QTI 3.0 shared stimuli", () => {
+  test(
+    "stimulus",
+    async () => {
+      const stimulus = new QtiStimulus({
+        identifier: "STIM-1",
+        title: "Passage",
+        html: "<h2>Passage</h2><p>Some text.</p>",
+      });
+
+      await expectValid(stimulus.buildXml(), { kind: "asi" });
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "item with a stimulus reference",
+    async () => {
+      const item = new QtiItem({ identifier: "ITEM-1", title: "Question" });
+      item.addStimulusRef({
+        identifier: "STIM-1",
+        href: "stimulus-STIM-1.xml",
+        title: "Passage",
+      });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        cardinality: "single",
+        baseType: "string",
+      });
+      item.addItemBodyFromHtml(
+        '<div data-stimulus-idref="STIM-1"></div><p>What is the passage about?</p>',
+      );
+      item.addInteraction(
+        new ExtendedTextInteraction({ responseIdentifier: "RESPONSE" }),
+      );
+
+      await expectValid(item.buildXml());
     },
     TIMEOUT,
   );

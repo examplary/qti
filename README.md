@@ -154,6 +154,31 @@ for (const part of test.getTestParts()) {
 }
 ```
 
+## Shared stimuli
+
+QTI 3.0 items can share content, like a reading passage, through a stimulus:
+
+```ts
+const item = QtiItem.fromXmlString(itemXml);
+
+for (const ref of item.getStimulusRefs()) {
+  // ref.href is relative to the item file
+  const stimulus = QtiStimulus.fromXmlString(stimulusXml);
+  console.log(stimulus.title, stimulus.html);
+}
+
+// Put stimuli where the item body asks for them (`data-stimulus-idref` or an
+// XInclude of the stimulus file); `placed` tells you which ones were placed
+const { html, placed } = replaceStimulusPlacements(
+  item.getItemBodyHtml(),
+  item.getStimulusRefs(),
+  (ref) => `<aside>${ref.title}</aside>`,
+);
+```
+
+Exporting works the other way around: `new QtiStimulus({ identifier, title, html })`,
+`stimulus.addToPackage(pkg)` and `item.addStimulusRef({ identifier, href: stimulus.filename })`.
+
 ## Development
 
 ```bash

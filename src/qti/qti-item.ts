@@ -72,6 +72,13 @@ export enum ResponseProcessingTemplate {
   MapResponsePoint = "https://purl.imsglobal.org/spec/qti/v3p0/rptemplates/map_response_point.xml",
 }
 
+/** A reference to a stimulus shared between items (QTI 3.0 only). */
+export type QtiStimulusRef = {
+  identifier: string;
+  href: string;
+  title?: string;
+};
+
 export type ItemBodyElement =
   | {
       html: string;
@@ -99,6 +106,7 @@ export class QtiItem extends QtiElement {
   protected summedMappedResponses: string[] | null = null;
   protected outcomeDeclarations: Map<string, OutcomeDeclaration> = new Map();
   protected itemBodyElements: ItemBodyElement[] = [];
+  protected stimulusRefs: QtiStimulusRef[] = [];
 
   constructor(options?: QtiItemOptions) {
     super();
@@ -147,6 +155,15 @@ export class QtiItem extends QtiElement {
       toolVersion: getAttr("tool-version") ?? root.attr("toolVersion"),
     });
     item.readNamespacedAttributes(root.attr() ?? {});
+
+    root.children("qti-assessment-stimulus-ref").each((_, el) => {
+      const $ref = $(el);
+      const identifier = $ref.attr("identifier");
+      const href = $ref.attr("href");
+      if (identifier && href) {
+        item.addStimulusRef({ identifier, href, title: $ref.attr("title") });
+      }
+    });
 
     // Parse response declarations (both versions)
     const responseDeclSelector = isV21
@@ -450,6 +467,12 @@ export class QtiItem extends QtiElement {
       }
     }
 
+    if (version === QtiVersion.v3p0) {
+      for (const stimulusRef of this.stimulusRefs) {
+        item.ele("qti-assessment-stimulus-ref", { ...stimulusRef });
+      }
+    }
+
     // Item body
     const itemBody = item.ele(el("qti-item-body"));
     for (const element of this.itemBodyElements) {
@@ -536,6 +559,14 @@ export class QtiItem extends QtiElement {
 
   public getOutcomeDeclarations(): OutcomeDeclaration[] {
     return Array.from(this.outcomeDeclarations.values());
+  }
+
+  public addStimulusRef(stimulusRef: QtiStimulusRef) {
+    this.stimulusRefs.push(stimulusRef);
+  }
+
+  public getStimulusRefs(): QtiStimulusRef[] {
+    return this.stimulusRefs;
   }
 
   public getItemBodyHtml(): string {
