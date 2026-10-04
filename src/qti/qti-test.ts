@@ -15,6 +15,7 @@ import {
 } from "./types";
 import { getResourceType } from "../ims/ims-manifest";
 import { ImsPackage } from "../ims/ims-package";
+import { appendHtmlFragment, extractHtmlFragment } from "../utils/html";
 import { toElementName, toAttributeName } from "../utils/version";
 
 type QtiTestOptions = {
@@ -126,6 +127,17 @@ export class QtiTest extends QtiElement {
           "false",
       });
 
+      $section.children(el("qti-rubric-block")).each((_, block) => {
+        const $block = $(block);
+        // QTI 3 wraps the content in a qti-content-body, QTI 2.1 doesn't
+        const $body = $block.children(el("qti-content-body"));
+        section.addRubricBlock({
+          view: ($block.attr("view") ?? "").split(/\s+/).filter(Boolean),
+          use: $block.attr("use"),
+          html: extractHtmlFragment($body.length ? $body : $block),
+        });
+      });
+
       $section
         .children(
           `${el("qti-assessment-item-ref")}, ${el("qti-assessment-section")}`,
@@ -220,6 +232,17 @@ export class QtiTest extends QtiElement {
         required: section.required ? "true" : "false",
         [attr("keep-together")]: section.keepTogether ? "true" : "false",
       });
+
+      for (const rubricBlock of section.getRubricBlocks()) {
+        const block = sec.ele(el("qti-rubric-block"), {
+          view: rubricBlock.view.join(" ") || "candidate",
+          use: rubricBlock.use,
+        });
+        appendHtmlFragment(
+          rubricBlock.html,
+          version === QtiVersion.v2p1 ? block : block.ele("qti-content-body"),
+        );
+      }
 
       for (const child of section.getChildren()) {
         if (child instanceof QtiAssessmentSection) {

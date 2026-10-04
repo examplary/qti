@@ -13,6 +13,13 @@ export type QtiItemReference = {
   href: string;
 };
 
+export type QtiRubricBlock = {
+  /** Who the block is for, like "candidate" or "scorer". */
+  view: string[];
+  use?: string;
+  html: string;
+};
+
 export class QtiAssessmentSection {
   public identifier: string;
   public title: string;
@@ -21,6 +28,8 @@ export class QtiAssessmentSection {
   public fixed?: boolean;
   public required?: boolean;
   public keepTogether?: boolean;
+
+  protected rubricBlocks: QtiRubricBlock[] = [];
 
   /** Item references and nested sections, in the order they appear. */
   protected children: (QtiItemReference | QtiAssessmentSection)[] = [];
@@ -37,6 +46,14 @@ export class QtiAssessmentSection {
 
   public addItemReference(itemIdentifier: string, href: string) {
     this.children.push({ itemIdentifier, href });
+  }
+
+  public addRubricBlock(rubricBlock: QtiRubricBlock) {
+    this.rubricBlocks.push(rubricBlock);
+  }
+
+  public getRubricBlocks(): QtiRubricBlock[] {
+    return this.rubricBlocks;
   }
 
   public addSection(section: QtiAssessmentSection) {

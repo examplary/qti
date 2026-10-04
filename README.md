@@ -148,6 +148,7 @@ const test = QtiTest.fromXmlString(testXml); // auto-detects version
 for (const part of test.getTestParts()) {
   for (const section of part.getSections()) {
     console.log(section.title, section.getItemReferences());
+    console.log("Rubric blocks:", section.getRubricBlocks()); // { view, use, html }
     console.log("Nested sections:", section.getSections());
   }
 }

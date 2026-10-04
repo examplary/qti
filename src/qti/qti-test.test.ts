@@ -240,6 +240,73 @@ describe("QtiTest.fromXmlString", () => {
     },
   );
 
+  test.each([
+    [
+      "QTI 3",
+      `<qti-assessment-test identifier="t"><qti-test-part identifier="P">
+        <qti-assessment-section identifier="S" title="Reading">
+          <qti-rubric-block view="candidate" use="instructions">
+            <qti-content-body><p>Read the <b>text</b>.</p></qti-content-body>
+          </qti-rubric-block>
+          <qti-rubric-block view="scorer tutor"><qti-content-body><p>Be kind.</p></qti-content-body></qti-rubric-block>
+        </qti-assessment-section>
+      </qti-test-part></qti-assessment-test>`,
+    ],
+    [
+      "QTI 2.1",
+      `<assessmentTest identifier="t"><testPart identifier="P">
+        <assessmentSection identifier="S" title="Reading">
+          <rubricBlock view="candidate" use="instructions"><p>Read the <b>text</b>.</p></rubricBlock>
+          <rubricBlock view="scorer tutor"><p>Be kind.</p></rubricBlock>
+        </assessmentSection>
+      </testPart></assessmentTest>`,
+    ],
+  ])("it parses a section's rubric blocks (%s)", (_, xml) => {
+    const [section] = QtiTest.fromXmlString(xml)
+      .getTestParts()[0]
+      .getSections();
+
+    expect(section.getRubricBlocks()).toEqual([
+      {
+        view: ["candidate"],
+        use: "instructions",
+        html: "<p>Read the <b>text</b>.</p>",
+      },
+      { view: ["scorer", "tutor"], use: undefined, html: "<p>Be kind.</p>" },
+    ]);
+  });
+
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "roundtrip: rubric blocks survive buildXml -> fromXmlString (%s)",
+    (version) => {
+      const original = new QtiTest({ identifier: "rubrics" });
+      const part = new QtiTestPart({ identifier: "PART-1" });
+      const section = new QtiAssessmentSection({
+        identifier: "SEC-1",
+        title: "Reading",
+        visible: true,
+      });
+      section.addRubricBlock({
+        view: ["candidate"],
+        use: "instructions",
+        html: "<p>Read the text.</p>",
+      });
+      section.addItemReference("q1", "q1.xml");
+      part.addSection(section);
+      original.addTestPart(part);
+
+      const parsed = QtiTest.fromXmlString(original.buildXml({ version }));
+      const [parsedSection] = parsed.getTestParts()[0].getSections();
+
+      expect(parsedSection.getRubricBlocks()).toEqual(
+        section.getRubricBlocks(),
+      );
+      expect(parsedSection.getItemReferences()).toEqual(
+        section.getItemReferences(),
+      );
+    },
+  );
+
   test("it throws on missing root element", () => {
     const xml = `<?xml version="1.0"?><invalid-element/>`;
 
