@@ -45,3 +45,14 @@ export const replaceStimulusPlacements = (
 
   return { html: $.root().html() ?? "", placed: [...placed] };
 };
+
+/** The files an item body includes as XML, like a shared passage */
+export const getIncludedHrefs = (html: string): string[] => {
+  const $ = load(html, { xmlMode: true });
+  return $("*")
+    .filter(isInclude)
+    .toArray()
+    .filter((node) => ($(node).attr("parse") ?? "xml") === "xml")
+    .map((node) => $(node).attr("href"))
+    .filter((href): href is string => !!href);
+};

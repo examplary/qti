@@ -20,6 +20,30 @@ describe("QtiStimulus", () => {
     });
   });
 
+  test("it reads an included fragment", () => {
+    const stimulus = QtiStimulus.fromIncludedXmlString(`<?xml version="1.0"?>
+      <!-- A shared passage -->
+      <div xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v3p0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqtiasi_v3p0 x.xsd" class="passage" xml:lang="en-GB"><p>Text</p></div>`);
+
+    expect(stimulus).toMatchObject({
+      identifier: "",
+      language: "en-GB",
+      html: '<div class="passage" xml:lang="en-GB"><p>Text</p></div>',
+    });
+  });
+
+  test("it reads an included stimulus", () => {
+    const stimulus = QtiStimulus.fromIncludedXmlString(
+      `<qti-assessment-stimulus identifier="STIM-1"><qti-stimulus-body><p>Text</p></qti-stimulus-body></qti-assessment-stimulus>`,
+    );
+
+    expect(stimulus).toMatchObject({
+      identifier: "STIM-1",
+      html: "<p>Text</p>",
+    });
+  });
+
   test("it throws without a stimulus element", () => {
     expect(() => QtiStimulus.fromXmlString("<qti-assessment-item/>")).toThrow();
   });

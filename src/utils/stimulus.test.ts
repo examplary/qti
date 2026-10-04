@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { replaceStimulusPlacements } from "./stimulus";
+import { getIncludedHrefs, replaceStimulusPlacements } from "./stimulus";
 
 describe("replaceStimulusPlacements", () => {
   const refs = [
@@ -33,5 +33,18 @@ describe("replaceStimulusPlacements", () => {
 
     expect(html).toBe(`<div data-stimulus-idref="OTHER"/><p>Question</p>`);
     expect(placed).toEqual([]);
+  });
+});
+
+describe("getIncludedHrefs", () => {
+  test("it lists the files an item body includes as XML", () => {
+    expect(
+      getIncludedHrefs(
+        `<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="passage.xml" parse="xml"/>
+        <p>Question</p>
+        <xi:include href="other.xml"/>
+        <xi:include href="notes.txt" parse="text"/>`,
+      ),
+    ).toEqual(["passage.xml", "other.xml"]);
   });
 });

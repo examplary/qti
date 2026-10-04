@@ -167,6 +167,10 @@ for (const ref of item.getStimulusRefs()) {
   console.log(stimulus.title, stimulus.html);
 }
 
+// Items can also XInclude a file directly, often a plain fragment of body content:
+// getIncludedHrefs(item.getItemBodyHtml()) lists those, and
+// QtiStimulus.fromIncludedXmlString() reads stimuli and fragments alike
+
 // Put stimuli where the item body asks for them (`data-stimulus-idref` or an
 // XInclude of the stimulus file); `placed` tells you which ones were placed
 const { html, placed } = replaceStimulusPlacements(

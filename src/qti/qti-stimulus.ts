@@ -45,6 +45,29 @@ export class QtiStimulus {
     });
   }
 
+  /**
+   * Reads a file an item body includes: a stimulus, or a fragment of item
+   * body content, like a `<div>` holding a passage.
+   */
+  public static fromIncludedXmlString(xml: string): QtiStimulus {
+    const $ = load(xml, { xmlMode: true });
+    if ($("qti-assessment-stimulus").length) {
+      return QtiStimulus.fromXmlString(xml);
+    }
+
+    const root = $.root().children().first();
+    if (!root.length) throw new Error("Missing included element");
+    for (const name of Object.keys(root.attr() ?? {})) {
+      if (/^(xmlns(:|$)|xsi:)/.test(name)) root.removeAttr(name);
+    }
+
+    return new QtiStimulus({
+      identifier: root.attr("identifier") ?? "",
+      language: root.attr("xml:lang"),
+      html: $.xml(root),
+    });
+  }
+
   public buildXml(): string {
     const config = QTI_VERSION_CONFIG[QtiVersion.v3p0];
     const stimulus = create({ version: "1.0", encoding: "UTF-8" }).ele(
