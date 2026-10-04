@@ -1,8 +1,16 @@
 import { load } from "cheerio";
+import type { AnyNode } from "domhandler";
 import { create } from "xmlbuilder2";
 
 import { QtiVersion, QTI_VERSION_CONFIG } from "../qti/types";
 import { detectVersionFromResourceType } from "../utils/version";
+
+/**
+ * Matches elements by name with or without a namespace prefix: some tools
+ * write `<imscp:resource>`, which a plain `resource` selector doesn't match.
+ */
+const named = (name: string) => (_: number, node: AnyNode) =>
+  "name" in node && node.name.split(":").pop() === name;
 
 export enum ImsManifestResourceType {
   // QTI 3 AssessmentTest
@@ -159,17 +167,18 @@ export class ImsManifest {
 
   public static fromXmlString(xml: string): ImsManifest {
     const $ = load(xml, { xmlMode: true });
-    const root = $("manifest");
+    const root = $("*").filter(named("manifest")).first();
     if (!root.length) throw new Error("Missing manifest element");
 
-    const resources = root.find("resources");
+    const resources = root.find("*").filter(named("resources")).first();
     if (!resources?.length) {
       throw new Error("Invalid IMS Manifest XML: Missing resources element");
     }
 
     // Auto-detect version from resource types
     let detectedVersion = QtiVersion.v3p0;
-    resources.find("resource").each((_, res) => {
+    const resourceNodes = resources.find("*").filter(named("resource"));
+    resourceNodes.each((_, res) => {
       const type = $(res).attr("type");
       if (type) {
         const version = detectVersionFromResourceType(type);
@@ -185,7 +194,7 @@ export class ImsManifest {
       version: detectedVersion,
     });
 
-    resources.find("resource").each((_, res) => {
+    resourceNodes.each((_, res) => {
       const $res = $(res);
       const identifier = $res.attr("identifier");
       const type = $res.attr("type");
@@ -197,28 +206,34 @@ export class ImsManifest {
       const href = $res.attr("href");
 
       const files: ImsManifestFile[] = [];
-      $res.find("file").each((_, file) => {
-        const $file = $(file);
-        const fileHref = $file.attr("href");
-        if (fileHref) {
-          files.push({ href: fileHref });
-        }
-      });
+      $res
+        .find("*")
+        .filter(named("file"))
+        .each((_, file) => {
+          const $file = $(file);
+          const fileHref = $file.attr("href");
+          if (fileHref) {
+            files.push({ href: fileHref });
+          }
+        });
 
       const dependencies: ImsManifestDependency[] = [];
-      $res.find("dependency").each((_, dep) => {
-        const $dep = $(dep);
-        const identifierref = $dep.attr("identifierref");
-        if (identifierref) {
-          dependencies.push({ identifierref });
-        }
-      });
+      $res
+        .find("*")
+        .filter(named("dependency"))
+        .each((_, dep) => {
+          const $dep = $(dep);
+          const identifierref = $dep.attr("identifierref");
+          if (identifierref) {
+            dependencies.push({ identifierref });
+          }
+        });
 
       manifest.addResource({
         identifier,
         type: type as ImsManifestResourceType,
         href: href || undefined,
-        metadata: $res.find("metadata").first(), // TODO: inconsistent type casting here
+        metadata: $res.find("*").filter(named("metadata")).first(), // TODO: inconsistent type casting here
         files,
         dependencies: dependencies.length > 0 ? dependencies : undefined,
       });

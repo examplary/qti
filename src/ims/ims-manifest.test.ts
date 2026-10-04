@@ -67,4 +67,37 @@ describe("ImsManifest", () => {
       '<resource identifier="res3" type="imsqti_item_xmlv3p0" href="item3a.xml">',
     );
   });
+
+  test("parses a manifest with namespace-prefixed elements", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <imscp:manifest xmlns:imscp="http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1" identifier="manifestID">
+        <imscp:organizations/>
+        <imscp:resources>
+          <imscp:resource identifier="test-1" type="imsqti_test_xmlv3p0" href="test-1.xml">
+            <imscp:metadata><imscp:schema>QTI Package</imscp:schema></imscp:metadata>
+            <imscp:file href="test-1.xml"/>
+            <imscp:dependency identifierref="item-1"/>
+          </imscp:resource>
+          <imscp:resource identifier="item-1" type="imsqti_item_xmlv3p0" href="item-1.xml">
+            <imscp:file href="item-1.xml"/>
+          </imscp:resource>
+        </imscp:resources>
+      </imscp:manifest>`;
+
+    const manifest = ImsManifest.fromXmlString(xml);
+
+    expect(manifest.getResources()).toMatchObject([
+      {
+        identifier: "test-1",
+        type: ImsManifestResourceType.imsqti_test_xmlv3p0,
+        files: [{ href: "test-1.xml" }],
+        dependencies: [{ identifierref: "item-1" }],
+      },
+      {
+        identifier: "item-1",
+        type: ImsManifestResourceType.imsqti_item_xmlv3p0,
+        files: [{ href: "item-1.xml" }],
+      },
+    ]);
+  });
 });
