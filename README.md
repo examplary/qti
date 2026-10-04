@@ -140,6 +140,19 @@ for (const resource of itemResources) {
 }
 ```
 
+Tests parse the same way. Sections keep their item references and nested sections in order:
+
+```ts
+const test = QtiTest.fromXmlString(testXml); // auto-detects version
+
+for (const part of test.getTestParts()) {
+  for (const section of part.getSections()) {
+    console.log(section.title, section.getItemReferences());
+    console.log("Nested sections:", section.getSections());
+  }
+}
+```
+
 ## Development
 
 ```bash

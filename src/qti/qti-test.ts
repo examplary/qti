@@ -1,5 +1,7 @@
 import { load } from "cheerio";
+import type { AnyNode } from "domhandler";
 import { create } from "xmlbuilder2/lib/index.js";
+import { XMLBuilder } from "xmlbuilder2/lib/interfaces";
 
 import { QtiAssessmentSection } from "./qti-assessment-section";
 import { QtiElement } from "./qti-element";
@@ -60,7 +62,12 @@ export class QtiTest extends QtiElement {
 
   public static fromXmlString(xml: string): QtiTest {
     const $ = load(xml, { xmlMode: true });
-    const root = $("qti-assessment-test");
+    const version = $("assessmentTest").length
+      ? QtiVersion.v2p1
+      : QtiVersion.v3p0;
+    const el = (name: string) => toElementName(name, version);
+    const attr = (name: string) => toAttributeName(name, version);
+    const root = $(el("qti-assessment-test"));
     if (!root.length) throw new Error("Missing qti-assessment-test element");
 
     const test = new QtiTest({
@@ -74,14 +81,14 @@ export class QtiTest extends QtiElement {
     });
     test.readNamespacedAttributes(root.attr() ?? {});
 
-    root.find("qti-outcome-declaration").each((_, el) => {
-      const $out = $(el);
+    root.find(el("qti-outcome-declaration")).each((_, outcome) => {
+      const $out = $(outcome);
       const outcomeId = $out.attr("identifier");
       if (!outcomeId) return;
 
-      const defaultValueNode = $out.find("qti-default-value");
+      const defaultValueNode = $out.find(el("qti-default-value"));
       const valueNode = defaultValueNode.length
-        ? $(defaultValueNode).find("qti-value")
+        ? $(defaultValueNode).find(el("qti-value"))
         : undefined;
 
       let defaultValue: string | number | undefined = valueNode?.length
@@ -89,7 +96,8 @@ export class QtiTest extends QtiElement {
         : undefined;
       const cardinality = ($out.attr("cardinality") ||
         "single") as QtiCardinality;
-      const baseType = ($out.attr("base-type") || "string") as QtiBaseType;
+      const baseType = ($out.attr(attr("base-type")) ||
+        "string") as QtiBaseType;
       if (defaultValue) {
         if (baseType === "float" || baseType === "integer") {
           defaultValue = Number(defaultValue);
@@ -104,49 +112,53 @@ export class QtiTest extends QtiElement {
       });
     });
 
-    root.find("qti-test-part").each((_, el) => {
-      const $part = $(el);
-      const partId = $part.attr("identifier");
-      if (!partId) return;
-
-      const testPart = new QtiTestPart({
-        identifier: partId,
-        title: $part.attr("title"),
-        class: $part.attr("class"),
-        navigationMode: ($part.attr("navigation-mode") || "linear") as
-          "linear" | "nonlinear",
-        submissionMode: ($part.attr("submission-mode") || "simultaneous") as
-          "individual" | "simultaneous",
+    const parseSection = (node: AnyNode) => {
+      const $section = $(node);
+      const section = new QtiAssessmentSection({
+        identifier: $section.attr("identifier") ?? "",
+        title: $section.attr("title") ?? "",
+        visible: $section.attr("visible") !== "false",
+        class: $section.attr("class"),
+        fixed: $section.attr("fixed") === "true",
+        required: $section.attr("required") === "true",
+        keepTogether:
+          ($section.attr("keep-together") ?? $section.attr("keepTogether")) !==
+          "false",
       });
 
-      root.find("qti-assessment-section").each((_, sec) => {
-        const $section = $(sec);
-        const sectionId = $section.attr("identifier");
-        const sectionTitle = $section.attr("title");
-        if (!sectionId || !sectionTitle) return;
-
-        const section = new QtiAssessmentSection({
-          identifier: sectionId,
-          title: sectionTitle,
-          visible: $section.attr("visible") !== "false",
-          class: $section.attr("class"),
-          fixed: $section.attr("fixed") === "true",
-          required: $section.attr("required") === "true",
-          keepTogether:
-            ($section.attr("keep-together") ??
-              $section.attr("keepTogether")) !== "false",
-        });
-
-        root.find("qti-assessment-item-ref").each((_, ref) => {
-          const $ref = $(ref);
-          const itemId = $ref.attr("identifier");
-          const href = $ref.attr("href");
-          if (itemId && href) {
-            section.addItemReference(itemId, href);
+      $section
+        .children(
+          `${el("qti-assessment-item-ref")}, ${el("qti-assessment-section")}`,
+        )
+        .each((_, child) => {
+          const $child = $(child);
+          if ($child.is(el("qti-assessment-section"))) {
+            section.addSection(parseSection(child));
+            return;
           }
+
+          const itemId = $child.attr("identifier");
+          const href = $child.attr("href");
+          if (itemId && href) section.addItemReference(itemId, href);
         });
 
-        testPart.addSection(section);
+      return section;
+    };
+
+    root.children(el("qti-test-part")).each((_, part) => {
+      const $part = $(part);
+      const testPart = new QtiTestPart({
+        identifier: $part.attr("identifier") ?? "",
+        title: $part.attr("title"),
+        class: $part.attr("class"),
+        navigationMode: ($part.attr(attr("navigation-mode")) || "linear") as
+          "linear" | "nonlinear",
+        submissionMode: ($part.attr(attr("submission-mode")) ||
+          "simultaneous") as "individual" | "simultaneous",
+      });
+
+      $part.children(el("qti-assessment-section")).each((_, section) => {
+        testPart.addSection(parseSection(section));
       });
 
       test.addTestPart(testPart);
@@ -195,6 +207,32 @@ export class QtiTest extends QtiElement {
       }
     }
 
+    const appendSection = (
+      parent: XMLBuilder,
+      section: QtiAssessmentSection,
+    ) => {
+      const sec = parent.ele(el("qti-assessment-section"), {
+        identifier: section.identifier,
+        title: section.title,
+        class: section.class,
+        visible: section.visible ? "true" : "false",
+        fixed: section.fixed ? "true" : "false",
+        required: section.required ? "true" : "false",
+        [attr("keep-together")]: section.keepTogether ? "true" : "false",
+      });
+
+      for (const child of section.getChildren()) {
+        if (child instanceof QtiAssessmentSection) {
+          appendSection(sec, child);
+        } else {
+          sec.ele(el("qti-assessment-item-ref"), {
+            identifier: child.itemIdentifier,
+            href: child.href,
+          });
+        }
+      }
+    };
+
     // Parts
     for (const testPart of this.testParts) {
       const part = test.ele(el("qti-test-part"), {
@@ -205,25 +243,8 @@ export class QtiTest extends QtiElement {
         class: testPart.class,
       });
 
-      // Sections
       for (const section of testPart.getSections()) {
-        const sec = part.ele(el("qti-assessment-section"), {
-          identifier: section.identifier,
-          title: section.title,
-          class: section.class,
-          visible: section.visible ? "true" : "false",
-          fixed: section.fixed ? "true" : "false",
-          required: section.required ? "true" : "false",
-          [attr("keep-together")]: section.keepTogether ? "true" : "false",
-        });
-
-        // Item references
-        for (const itemRef of section.getItemReferences()) {
-          sec.ele(el("qti-assessment-item-ref"), {
-            identifier: itemRef.itemIdentifier,
-            href: itemRef.href,
-          });
-        }
+        appendSection(part, section);
       }
     }
 
@@ -260,6 +281,10 @@ export class QtiTest extends QtiElement {
 
   public addTestPart(testPart: QtiTestPart) {
     this.testParts.push(testPart);
+  }
+
+  public getTestParts(): QtiTestPart[] {
+    return this.testParts;
   }
 
   /**

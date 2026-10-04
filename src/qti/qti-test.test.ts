@@ -103,6 +103,143 @@ describe("QtiTest.fromXmlString", () => {
     expect(generatedXml).toContain('href="item-2.xml"');
   });
 
+  const describeSections = (test: QtiTest) => {
+    const describeSection = (section: QtiAssessmentSection): unknown => ({
+      identifier: section.identifier,
+      children: section
+        .getChildren()
+        .map((child) =>
+          child instanceof QtiAssessmentSection
+            ? describeSection(child)
+            : child.itemIdentifier,
+        ),
+    });
+
+    return test.getTestParts().map((part) => ({
+      identifier: part.identifier,
+      sections: part.getSections().map(describeSection),
+    }));
+  };
+
+  test("it gives each part and section only its own children", () => {
+    const xml = `<qti-assessment-test identifier="test-123">
+        <qti-test-part identifier="PART-1">
+          <qti-assessment-section identifier="SEC-1" title="One">
+            <qti-assessment-item-ref identifier="item-1" href="item-1.xml"/>
+          </qti-assessment-section>
+          <qti-assessment-section identifier="SEC-2" title="Two">
+            <qti-assessment-item-ref identifier="item-2" href="item-2.xml"/>
+            <qti-assessment-section identifier="SEC-2a" title="Two A">
+              <qti-assessment-item-ref identifier="item-3" href="item-3.xml"/>
+            </qti-assessment-section>
+            <qti-assessment-item-ref identifier="item-4" href="item-4.xml"/>
+          </qti-assessment-section>
+        </qti-test-part>
+        <qti-test-part identifier="PART-2">
+          <qti-assessment-section identifier="SEC-3" title="Three">
+            <qti-assessment-item-ref identifier="item-5" href="item-5.xml"/>
+          </qti-assessment-section>
+        </qti-test-part>
+      </qti-assessment-test>`;
+
+    expect(describeSections(QtiTest.fromXmlString(xml))).toEqual([
+      {
+        identifier: "PART-1",
+        sections: [
+          { identifier: "SEC-1", children: ["item-1"] },
+          {
+            identifier: "SEC-2",
+            children: [
+              "item-2",
+              { identifier: "SEC-2a", children: ["item-3"] },
+              "item-4",
+            ],
+          },
+        ],
+      },
+      {
+        identifier: "PART-2",
+        sections: [{ identifier: "SEC-3", children: ["item-5"] }],
+      },
+    ]);
+  });
+
+  test("it parses a QTI 2.1 test", () => {
+    const xml = `<assessmentTest identifier="test-21" title="Old Test">
+        <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="float">
+          <defaultValue><value>0</value></defaultValue>
+        </outcomeDeclaration>
+        <testPart identifier="PART-1" navigationMode="nonlinear" submissionMode="individual">
+          <assessmentSection identifier="SEC-1" title="One" visible="true">
+            <assessmentItemRef identifier="item-1" href="item-1.xml"/>
+          </assessmentSection>
+        </testPart>
+      </assessmentTest>`;
+
+    const test = QtiTest.fromXmlString(xml);
+
+    expect(test.title).toBe("Old Test");
+    expect(test.getTestParts()[0].navigationMode).toBe("nonlinear");
+    expect(test.getTestParts()[0].submissionMode).toBe("individual");
+    expect(describeSections(test)).toEqual([
+      {
+        identifier: "PART-1",
+        sections: [{ identifier: "SEC-1", children: ["item-1"] }],
+      },
+    ]);
+    expect(test.buildXml()).toContain('base-type="float"');
+  });
+
+  test("it keeps the items of a section without a title", () => {
+    const xml = `<qti-assessment-test identifier="test-123">
+        <qti-test-part identifier="PART-1">
+          <qti-assessment-section identifier="SEC-1">
+            <qti-assessment-item-ref identifier="item-1" href="item-1.xml"/>
+          </qti-assessment-section>
+        </qti-test-part>
+      </qti-assessment-test>`;
+
+    const [section] = QtiTest.fromXmlString(xml)
+      .getTestParts()[0]
+      .getSections();
+
+    expect(section.title).toBe("");
+    expect(section.getItemReferences()).toEqual([
+      { itemIdentifier: "item-1", href: "item-1.xml" },
+    ]);
+  });
+
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "roundtrip: nested sections survive buildXml -> fromXmlString (%s)",
+    (version) => {
+      const original = new QtiTest({ identifier: "nested" });
+      const part = new QtiTestPart({ identifier: "PART-1" });
+      const outer = new QtiAssessmentSection({
+        identifier: "SEC-1",
+        title: "Outer",
+        visible: true,
+      });
+      const inner = new QtiAssessmentSection({
+        identifier: "SEC-1a",
+        title: "Inner",
+        visible: false,
+      });
+      inner.addItemReference("q2", "q2.xml");
+      outer.addItemReference("q1", "q1.xml");
+      outer.addSection(inner);
+      outer.addItemReference("q3", "q3.xml");
+      part.addSection(outer);
+      original.addTestPart(part);
+
+      const parsed = QtiTest.fromXmlString(original.buildXml({ version }));
+
+      expect(describeSections(parsed)).toEqual(describeSections(original));
+      expect(
+        parsed.getTestParts()[0].getSections()[0].getSections()[0].visible,
+      ).toBe(false);
+    },
+  );
+
   test("it throws on missing root element", () => {
     const xml = `<?xml version="1.0"?><invalid-element/>`;
 

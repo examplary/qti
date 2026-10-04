@@ -22,7 +22,8 @@ export class QtiAssessmentSection {
   public required?: boolean;
   public keepTogether?: boolean;
 
-  protected itemReferences: QtiItemReference[] = [];
+  /** Item references and nested sections, in the order they appear. */
+  protected children: (QtiItemReference | QtiAssessmentSection)[] = [];
 
   constructor(options: QtiAssessmentSectionOptions) {
     this.identifier = options.identifier;
@@ -35,10 +36,30 @@ export class QtiAssessmentSection {
   }
 
   public addItemReference(itemIdentifier: string, href: string) {
-    this.itemReferences.push({ itemIdentifier, href });
+    this.children.push({ itemIdentifier, href });
   }
 
+  public addSection(section: QtiAssessmentSection) {
+    this.children.push(section);
+  }
+
+  /** The item references directly in this section. */
   public getItemReferences(): QtiItemReference[] {
-    return this.itemReferences;
+    return this.children.filter(
+      (child): child is QtiItemReference =>
+        !(child instanceof QtiAssessmentSection),
+    );
+  }
+
+  /** The sections nested directly in this section. */
+  public getSections(): QtiAssessmentSection[] {
+    return this.children.filter(
+      (child): child is QtiAssessmentSection =>
+        child instanceof QtiAssessmentSection,
+    );
+  }
+
+  public getChildren(): (QtiItemReference | QtiAssessmentSection)[] {
+    return this.children;
   }
 }
