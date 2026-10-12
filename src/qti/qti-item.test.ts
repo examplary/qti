@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, test } from "vitest";
 
-import { ChoiceInteraction, TextEntryInteraction } from "./interactions";
+import {
+  ChoiceInteraction,
+  SelectPointInteraction,
+  TextEntryInteraction,
+} from "./interactions";
 import { QtiItem, ResponseProcessingTemplate } from "./qti-item";
 import { QtiVersion } from "./types";
 
@@ -292,6 +296,59 @@ describe("QtiItem response mappings", () => {
       expect(parsed.mapping).toEqual(mapping);
     },
   );
+});
+
+describe("QtiItem area mappings", () => {
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "it writes and parses an area mapping in QTI %s",
+    (version) => {
+      const areaMapping = {
+        defaultValue: 0,
+        entries: [
+          { shape: "circle" as const, coords: "191,393,10", mappedValue: 1 },
+        ],
+      };
+      const item = new QtiItem({ identifier: "i" });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        baseType: "point",
+        areaMapping,
+      });
+
+      const xml = item.buildXml({ version });
+      expect(xml).toContain(
+        version === QtiVersion.v3p0
+          ? '<qti-area-map-entry shape="circle" coords="191,393,10" mapped-value="1"/>'
+          : '<areaMapEntry shape="circle" coords="191,393,10" mappedValue="1"/>',
+      );
+
+      const [parsed] = QtiItem.fromXmlString(xml).getResponseDeclarations();
+      expect(parsed.areaMapping).toEqual(areaMapping);
+    },
+  );
+});
+
+describe("QtiItem select point", () => {
+  test("it reads an <img> as the interaction's object", () => {
+    const item = QtiItem.fromXmlString(`
+      <qti-assessment-item identifier="map">
+        <qti-item-body>
+          <qti-select-point-interaction response-identifier="RESPONSE" max-choices="1">
+            <qti-prompt><p>Click Monaco.</p></qti-prompt>
+            <img src="europe.svg" width="600" height="513" alt="Europe"/>
+          </qti-select-point-interaction>
+        </qti-item-body>
+      </qti-assessment-item>`);
+
+    const [interaction] = item.getInteractions();
+    expect(interaction).toBeInstanceOf(SelectPointInteraction);
+    expect((interaction as SelectPointInteraction).object).toEqual({
+      data: "europe.svg",
+      type: undefined,
+      width: 600,
+      height: 513,
+    });
+  });
 });
 
 describe("QtiItem gap texts", () => {

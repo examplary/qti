@@ -2,6 +2,7 @@ import { load } from "cheerio";
 import { create } from "xmlbuilder2/lib/index.js";
 
 import { qtiInteractionTypes } from "./interactions";
+import type { HotspotShape } from "./interactions/hotspot-interaction";
 import {
   QtiInteraction,
   QtiPromptInteraction,
@@ -48,6 +49,11 @@ export type ResponseMapping = {
   entries: { mapKey: string; mappedValue: number; caseSensitive?: boolean }[];
 };
 
+export type AreaMapping = {
+  defaultValue?: number;
+  entries: { shape: HotspotShape; coords: string; mappedValue: number }[];
+};
+
 export type ResponseDeclaration = {
   identifier: string;
   cardinality?: QtiCardinality;
@@ -55,6 +61,8 @@ export type ResponseDeclaration = {
   correctResponse?: string[] | number[];
   /** Scores individual responses, e.g. each accepted answer to a text entry. */
   mapping?: ResponseMapping;
+  /** Scores points by the area of an image they are in, e.g. for select point. */
+  areaMapping?: AreaMapping;
 };
 
 export type OutcomeDeclaration = {
@@ -220,6 +228,24 @@ export class QtiItem extends QtiElement {
               .get(),
           }
         : undefined;
+      const areaMappingNode = $res
+        .find(isV21 ? "areaMapping" : "qti-area-mapping")
+        .first();
+      const areaMapping: AreaMapping | undefined = areaMappingNode.length
+        ? {
+            defaultValue: Number(
+              areaMappingNode.attr(attrOf("default-value")) ?? 0,
+            ),
+            entries: areaMappingNode
+              .find(isV21 ? "areaMapEntry" : "qti-area-map-entry")
+              .map((_, entry) => ({
+                shape: $(entry).attr("shape") as HotspotShape,
+                coords: $(entry).attr("coords") ?? "",
+                mappedValue: Number($(entry).attr(attrOf("mapped-value"))),
+              }))
+              .get(),
+          }
+        : undefined;
 
       item.addResponseDeclaration({
         identifier: responseId,
@@ -227,6 +253,7 @@ export class QtiItem extends QtiElement {
         baseType,
         correctResponse,
         mapping,
+        areaMapping,
       });
     });
 
@@ -446,6 +473,20 @@ export class QtiItem extends QtiElement {
             [attr("map-key")]: entry.mapKey,
             [attr("mapped-value")]: entry.mappedValue.toString(),
             [attr("case-sensitive")]: (entry.caseSensitive ?? true).toString(),
+          });
+        }
+      }
+      if (responseDeclaration.areaMapping?.entries.length) {
+        const areaMapping = response.ele(el("qti-area-mapping"), {
+          [attr("default-value")]: (
+            responseDeclaration.areaMapping.defaultValue ?? 0
+          ).toString(),
+        });
+        for (const entry of responseDeclaration.areaMapping.entries) {
+          areaMapping.ele(el("qti-area-map-entry"), {
+            shape: entry.shape,
+            coords: entry.coords,
+            [attr("mapped-value")]: entry.mappedValue.toString(),
           });
         }
       }

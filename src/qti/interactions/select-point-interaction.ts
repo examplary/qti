@@ -11,7 +11,7 @@ import { QtiVersion } from "../types";
 
 export type SelectPointObjectOptions = {
   data: string;
-  type: string;
+  type?: string;
   width?: number;
   height?: number;
 };
@@ -53,7 +53,8 @@ export class SelectPointInteraction extends QtiPromptInteraction {
   public static fromXmlString(xml: string): SelectPointInteraction {
     const $ = load(xml, { xmlMode: true });
     const $root = $("qti-select-point-interaction");
-    const $object = $root.find("object");
+    // QTI 3.0 also allows the image as an <img>
+    const $object = $root.children("object, img").first();
 
     return new SelectPointInteraction({
       responseIdentifier: $root.attr("response-identifier")!,
@@ -65,8 +66,8 @@ export class SelectPointInteraction extends QtiPromptInteraction {
         ? Number($root.attr("max-choices"))
         : undefined,
       object: {
-        data: $object.attr("data")!,
-        type: $object.attr("type")!,
+        data: ($object.attr("data") ?? $object.attr("src"))!,
+        type: $object.attr("type"),
         width: $object.attr("width")
           ? Number($object.attr("width"))
           : undefined,
