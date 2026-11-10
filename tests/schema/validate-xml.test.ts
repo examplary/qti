@@ -38,7 +38,9 @@ async function expectValid(
   const result = await validateQtiXml(xml, options);
   expect(
     result.valid,
-    `Expected valid ${result.version} ${result.kind} document, got:\n${result.errors.join("\n")}`,
+    `Expected valid ${result.version} ${
+      result.kind
+    } document, got:\n${result.errors.join("\n")}`,
   ).toBe(true);
 }
 
@@ -98,6 +100,149 @@ describe.each(VERSIONS)("QTI %s assessment items", (version) => {
         }),
       );
       item.addResponseProcessing(ResponseProcessingTemplate.MatchCorrect);
+
+      await expectValid(item.buildXml({ version }));
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "choice interaction item with feedback rules and modal feedback",
+    async () => {
+      const item = new QtiItem({
+        identifier: "choice-feedback-item",
+        title: "Capitals",
+        timeDependent: false,
+      });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        cardinality: "multiple",
+        baseType: "identifier",
+        correctResponse: ["A", "B"],
+      });
+      item.addOutcomeDeclaration();
+      item.addOutcomeDeclaration({
+        identifier: "FEEDBACK",
+        cardinality: "multiple",
+        baseType: "identifier",
+      });
+      item.addInteraction(
+        new ChoiceInteraction({
+          responseIdentifier: "RESPONSE",
+          maxChoices: 0,
+          choices: [
+            { identifier: "A", content: "Paris" },
+            { identifier: "B", content: "Lyon" },
+            { identifier: "C", content: "Berlin" },
+          ],
+        }),
+      );
+      item.addResponseProcessing(ResponseProcessingTemplate.MatchCorrect);
+
+      const addFeedback = (identifier: string) => ({
+        setOutcomeValue: "FEEDBACK",
+        value: {
+          multiple: [
+            { variable: "FEEDBACK" },
+            { baseValue: identifier, baseType: "identifier" as const },
+          ],
+        },
+      });
+      item.addResponseRules([
+        {
+          conditions: [
+            {
+              if: {
+                gte: [
+                  { variable: "SCORE" },
+                  { baseValue: 1, baseType: "float" },
+                ],
+              },
+              then: [addFeedback("correct")],
+            },
+            {
+              if: {
+                and: [
+                  {
+                    member: [
+                      { baseValue: "A", baseType: "identifier" },
+                      { variable: "RESPONSE" },
+                    ],
+                  },
+                  { not: { isNull: { variable: "RESPONSE" } } },
+                ],
+              },
+              then: [addFeedback("partially-correct")],
+            },
+          ],
+          else: [addFeedback("incorrect")],
+        },
+      ]);
+      for (const identifier of ["correct", "partially-correct", "incorrect"]) {
+        item.addModalFeedback({
+          identifier,
+          outcomeIdentifier: "FEEDBACK",
+          html: `<p>Feedback when ${identifier}</p>`,
+        });
+      }
+
+      await expectValid(item.buildXml({ version }));
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "text-entry item with string-match feedback",
+    async () => {
+      const item = new QtiItem({
+        identifier: "text-entry-feedback-item",
+        title: "Arithmetic",
+        timeDependent: false,
+      });
+      item.addResponseDeclaration({
+        identifier: "RESPONSE",
+        cardinality: "single",
+        baseType: "string",
+        correctResponse: ["4"],
+        mapping: { entries: [{ mapKey: "4", mappedValue: 1 }] },
+      });
+      item.addOutcomeDeclaration();
+      item.addOutcomeDeclaration({
+        identifier: "FEEDBACK",
+        cardinality: "multiple",
+        baseType: "identifier",
+      });
+      item.addInteraction(
+        new TextEntryInteraction({ responseIdentifier: "RESPONSE" }),
+      );
+      item.addResponseProcessing(ResponseProcessingTemplate.MapResponse);
+      item.addResponseRules([
+        {
+          conditions: [
+            {
+              if: {
+                stringMatch: [
+                  { variable: "RESPONSE" },
+                  { baseValue: "5", baseType: "string" },
+                ],
+                caseSensitive: false,
+              },
+              then: [
+                {
+                  setOutcomeValue: "FEEDBACK",
+                  value: { baseValue: "VALUE_1", baseType: "identifier" },
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      item.addModalFeedback({
+        identifier: "VALUE_1",
+        outcomeIdentifier: "FEEDBACK",
+        title: "Off by one",
+        html: "Close, but 2 + 2 is 4.",
+      });
 
       await expectValid(item.buildXml({ version }));
     },

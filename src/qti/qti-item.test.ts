@@ -367,3 +367,175 @@ describe("QtiItem gap texts", () => {
     expect(item.getInteractions()).toEqual([first, second]);
   });
 });
+
+describe("QtiItem feedback", () => {
+  const buildFeedbackItem = () => {
+    const item = new QtiItem({ identifier: "i" });
+    item.addResponseDeclaration({
+      identifier: "RESPONSE",
+      cardinality: "single",
+      baseType: "identifier",
+      correctResponse: ["A"],
+    });
+    item.addOutcomeDeclaration({
+      identifier: "FEEDBACK",
+      cardinality: "multiple",
+      baseType: "identifier",
+    });
+    item.addResponseProcessing(ResponseProcessingTemplate.MatchCorrect);
+    item.addResponseRules([
+      {
+        setOutcomeValue: "FEEDBACK",
+        value: { baseValue: "general", baseType: "identifier" },
+      },
+    ]);
+    item.addModalFeedback({
+      identifier: "general",
+      outcomeIdentifier: "FEEDBACK",
+      title: "Note",
+      html: "<p>Paris is the <strong>capital</strong>.</p>",
+    });
+    return item;
+  };
+
+  test("it writes the template as rules when there are custom rules", () => {
+    const xml = buildFeedbackItem().buildXml();
+
+    expect(xml).not.toContain("template=");
+    expect(xml.replace(/>\s+</g, "><")).toContain(
+      '<qti-response-if><qti-match><qti-variable identifier="RESPONSE"/><qti-correct identifier="RESPONSE"/></qti-match>',
+    );
+    expect(xml.replace(/>\s+</g, "><")).toContain(
+      '<qti-set-outcome-value identifier="FEEDBACK"><qti-base-value base-type="identifier">general</qti-base-value></qti-set-outcome-value>',
+    );
+  });
+
+  test("it keeps using the template without custom rules", () => {
+    const item = new QtiItem({ identifier: "i" });
+    item.addResponseProcessing(ResponseProcessingTemplate.MatchCorrect);
+
+    expect(item.buildXml()).toContain(
+      'template="https://purl.imsglobal.org/spec/qti/v3p0/rptemplates/match_correct.xml"',
+    );
+  });
+
+  test("it writes modal feedback after response processing", () => {
+    const xml = buildFeedbackItem().buildXml();
+
+    expect(xml.indexOf("<qti-modal-feedback")).toBeGreaterThan(
+      xml.indexOf("<qti-response-processing"),
+    );
+    expect(xml).toContain(
+      '<qti-modal-feedback outcome-identifier="FEEDBACK" show-hide="show" identifier="general" title="Note">',
+    );
+    expect(xml).toContain("<qti-content-body>");
+  });
+
+  test("it writes QTI 2.1 modal feedback without a content body", () => {
+    const xml = buildFeedbackItem().buildXml({ version: QtiVersion.v2p1 });
+
+    expect(xml).toContain(
+      '<modalFeedback outcomeIdentifier="FEEDBACK" showHide="show" identifier="general" title="Note">',
+    );
+    expect(xml).toContain(
+      '<baseValue baseType="identifier">general</baseValue>',
+    );
+    expect(xml).not.toContain("contentBody");
+  });
+
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "modal feedback survives a build -> parse roundtrip in QTI %s",
+    (version) => {
+      const parsed = QtiItem.fromXmlString(
+        buildFeedbackItem().buildXml({ version }),
+      );
+
+      expect(parsed.getModalFeedbacks()).toEqual([
+        {
+          identifier: "general",
+          outcomeIdentifier: "FEEDBACK",
+          showHide: "show",
+          title: "Note",
+          html: expect.stringContaining("<strong>capital</strong>"),
+        },
+      ]);
+    },
+  );
+
+  test.each([QtiVersion.v3p0, QtiVersion.v2p1])(
+    "response rules survive a build -> parse roundtrip in QTI %s",
+    (version) => {
+      const item = buildFeedbackItem();
+      item.addResponseRules([
+        {
+          conditions: [
+            {
+              if: {
+                stringMatch: [
+                  { variable: "RESPONSE" },
+                  { baseValue: "Lyon", baseType: "string" },
+                ],
+                caseSensitive: false,
+              },
+              then: [],
+            },
+          ],
+          else: [
+            {
+              setOutcomeValue: "FEEDBACK",
+              value: {
+                multiple: [
+                  { variable: "FEEDBACK" },
+                  { baseValue: "CHOICE_2", baseType: "identifier" },
+                ],
+              },
+            },
+          ],
+        },
+      ]);
+
+      const parsed = QtiItem.fromXmlString(item.buildXml({ version }));
+
+      expect(parsed.getResponseRules()).toEqual([
+        {
+          conditions: [
+            {
+              if: {
+                match: [{ variable: "RESPONSE" }, { correct: "RESPONSE" }],
+              },
+              then: [
+                {
+                  setOutcomeValue: "SCORE",
+                  value: { baseValue: 1, baseType: "float" },
+                },
+              ],
+            },
+          ],
+          else: [
+            {
+              setOutcomeValue: "SCORE",
+              value: { baseValue: 0, baseType: "float" },
+            },
+          ],
+        },
+        ...item.getResponseRules(),
+      ]);
+    },
+  );
+
+  test("it skips response rules it can't fully read", () => {
+    const parsed = QtiItem.fromXmlString(`
+      <qti-assessment-item identifier="i">
+        <qti-response-processing>
+          <qti-set-outcome-value identifier="SCORE">
+            <qti-base-value base-type="float">1</qti-base-value>
+          </qti-set-outcome-value>
+          <qti-lookup-outcome-value identifier="GRADE">
+            <qti-variable identifier="SCORE"/>
+          </qti-lookup-outcome-value>
+        </qti-response-processing>
+      </qti-assessment-item>`);
+
+    expect(parsed.getResponseRules()).toEqual([]);
+  });
+});

@@ -10,6 +10,12 @@ import {
 import { QtiElement } from "./qti-element";
 import { QtiTest } from "./qti-test";
 import {
+  appendResponseRules,
+  parseResponseRules,
+  QtiExpression,
+  QtiResponseRule,
+} from "./response-rules";
+import {
   QtiCardinality,
   QtiBaseType,
   QtiAudience,
@@ -18,7 +24,7 @@ import {
 } from "./types";
 import { getResourceType } from "../ims/ims-manifest";
 import { ImsPackage } from "../ims/ims-package";
-import { appendHtmlFragment } from "../utils/html";
+import { appendHtmlFragment, extractHtmlFragment } from "../utils/html";
 import { toElementName, toAttributeName } from "../utils/version";
 
 export type BuildXmlOptions = {
@@ -80,6 +86,18 @@ export enum ResponseProcessingTemplate {
   MapResponsePoint = "https://purl.imsglobal.org/spec/qti/v3p0/rptemplates/map_response_point.xml",
 }
 
+/**
+ * Feedback shown after response processing, when the outcome variable does
+ * (show) or doesn't (hide) contain the feedback's identifier.
+ */
+export type ModalFeedback = {
+  identifier: string;
+  outcomeIdentifier: string;
+  showHide?: "show" | "hide";
+  title?: string;
+  html: string;
+};
+
 /** A reference to a stimulus shared between items (QTI 3.0 only). */
 export type QtiStimulusRef = {
   identifier: string;
@@ -112,6 +130,8 @@ export class QtiItem extends QtiElement {
   protected responseDeclarations: Map<string, ResponseDeclaration> = new Map();
   protected responseProcessing: ResponseProcessingTemplate | null = null;
   protected summedMappedResponses: string[] | null = null;
+  protected responseRules: QtiResponseRule[] = [];
+  protected modalFeedbacks: ModalFeedback[] = [];
   protected outcomeDeclarations: Map<string, OutcomeDeclaration> = new Map();
   protected itemBodyElements: ItemBodyElement[] = [];
   protected stimulusRefs: QtiStimulusRef[] = [];
@@ -364,8 +384,38 @@ export class QtiItem extends QtiElement {
         if (mappedTemplate) {
           item.addResponseProcessing(mappedTemplate);
         }
+      } else {
+        const rules = parseResponseRules(
+          $,
+          responseProcessing.first().children().toArray(),
+          isV21 ? QtiVersion.v2p1 : QtiVersion.v3p0,
+        );
+        if (rules?.length) item.addResponseRules(rules);
       }
     }
+
+    root
+      .children(isV21 ? "modalFeedback" : "qti-modal-feedback")
+      .each((_, el) => {
+        const $feedback = $(el);
+        const attrOf = (name: string) =>
+          isV21 ? toAttributeName(name, QtiVersion.v2p1) : name;
+        const identifier = $feedback.attr("identifier");
+        const outcomeIdentifier = $feedback.attr(attrOf("outcome-identifier"));
+        if (!identifier || !outcomeIdentifier) return;
+
+        const $content = isV21
+          ? $feedback
+          : $feedback.children("qti-content-body");
+        item.addModalFeedback({
+          identifier,
+          outcomeIdentifier,
+          showHide:
+            $feedback.attr(attrOf("show-hide")) === "hide" ? "hide" : "show",
+          title: $feedback.attr("title"),
+          html: extractHtmlFragment($content),
+        });
+      });
 
     // Parse direct children whose tag name has a `prefix:elementName` form
     // — these are namespaced extension elements (e.g. our own
@@ -544,7 +594,7 @@ export class QtiItem extends QtiElement {
     }
 
     // Response processing
-    if (this.responseProcessing) {
+    if (this.responseProcessing && !this.responseRules.length) {
       const templateUrl = this.getVersionedTemplateUrl(
         this.responseProcessing,
         version,
@@ -552,17 +602,83 @@ export class QtiItem extends QtiElement {
       item.ele(el("qti-response-processing"), {
         template: templateUrl,
       });
-    } else if (this.summedMappedResponses?.length) {
-      const sum = item
-        .ele(el("qti-response-processing"))
-        .ele(el("qti-set-outcome-value"), { identifier: "SCORE" })
-        .ele(el("qti-sum"));
-      for (const identifier of this.summedMappedResponses) {
-        sum.ele(el("qti-map-response"), { identifier });
+    } else {
+      const rules = [...this.getScoringRules(), ...this.responseRules];
+      if (rules.length) {
+        appendResponseRules(
+          item.ele(el("qti-response-processing")),
+          rules,
+          version,
+        );
       }
     }
 
+    for (const feedback of this.modalFeedbacks) {
+      const node = item.ele(el("qti-modal-feedback"), {
+        [attr("outcome-identifier")]: feedback.outcomeIdentifier,
+        [attr("show-hide")]: feedback.showHide ?? "show",
+        identifier: feedback.identifier,
+        title: feedback.title,
+      });
+      appendHtmlFragment(
+        feedback.html,
+        version === QtiVersion.v3p0 ? node.ele("qti-content-body") : node,
+      );
+    }
+
     return item.end({ prettyPrint: true });
+  }
+
+  /** The scoring as explicit rules, so custom rules can follow it. */
+  private getScoringRules(): QtiResponseRule[] {
+    const setScore = (value: QtiExpression): QtiResponseRule => ({
+      setOutcomeValue: "SCORE",
+      value,
+    });
+    const zero = setScore({ baseValue: 0, baseType: "float" });
+    const response: QtiExpression = { variable: "RESPONSE" };
+
+    if (this.summedMappedResponses?.length) {
+      return [
+        setScore({
+          sum: this.summedMappedResponses.map((identifier) => ({
+            mapResponse: identifier,
+          })),
+        }),
+      ];
+    }
+
+    switch (this.responseProcessing) {
+      case ResponseProcessingTemplate.MatchCorrect:
+        return [
+          {
+            conditions: [
+              {
+                if: { match: [response, { correct: "RESPONSE" }] },
+                then: [setScore({ baseValue: 1, baseType: "float" })],
+              },
+            ],
+            else: [zero],
+          },
+        ];
+      case ResponseProcessingTemplate.MapResponse:
+      case ResponseProcessingTemplate.MapResponsePoint:
+        return [
+          {
+            conditions: [{ if: { isNull: response }, then: [zero] }],
+            else: [
+              setScore(
+                this.responseProcessing ===
+                  ResponseProcessingTemplate.MapResponse
+                  ? { mapResponse: "RESPONSE" }
+                  : { mapResponsePoint: "RESPONSE" },
+              ),
+            ],
+          },
+        ];
+      default:
+        return [];
+    }
   }
 
   private getVersionedTemplateUrl(
@@ -679,6 +795,27 @@ export class QtiItem extends QtiElement {
   public addSummedMapResponseProcessing(responseIdentifiers: string[]) {
     this.responseProcessing = null;
     this.summedMappedResponses = responseIdentifiers;
+  }
+
+  /**
+   * Adds response processing rules that run after the item is scored, e.g. to
+   * set a feedback outcome. A response processing template is written out as
+   * rules then, since QTI doesn't allow both.
+   */
+  public addResponseRules(rules: QtiResponseRule[]) {
+    this.responseRules.push(...rules);
+  }
+
+  public addModalFeedback(feedback: ModalFeedback) {
+    this.modalFeedbacks.push(feedback);
+  }
+
+  public getResponseRules(): QtiResponseRule[] {
+    return this.responseRules;
+  }
+
+  public getModalFeedbacks(): ModalFeedback[] {
+    return this.modalFeedbacks;
   }
 
   /** Adds a paragraph of HTML with inline interactions, e.g. gaps in a text. */

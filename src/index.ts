@@ -8,6 +8,7 @@ export * from "./qti/qti-test-part";
 export * from "./qti/qti-assessment-section";
 
 export * from "./qti/qti-item";
+export * from "./qti/response-rules";
 export * from "./qti/qti-stimulus";
 export * from "./qti/interactions";
 
