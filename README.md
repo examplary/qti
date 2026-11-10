@@ -183,6 +183,46 @@ const { html, placed } = replaceStimulusPlacements(
 Exporting works the other way around: `new QtiStimulus({ identifier, title, html })`,
 `stimulus.addToPackage(pkg)` and `item.addStimulusRef({ identifier, href: stimulus.filename })`.
 
+## Feedback
+
+Modal feedback is shown when response processing sets its identifier on an outcome.
+Response rules run after the item is scored; a response processing template is written
+out as rules then, since QTI doesn't allow both.
+
+```ts
+item.addOutcomeDeclaration({
+  identifier: "FEEDBACK",
+  cardinality: "multiple",
+  baseType: "identifier",
+});
+item.addResponseProcessing(ResponseProcessingTemplate.MatchCorrect);
+item.addResponseRules([
+  {
+    conditions: [
+      {
+        if: {
+          gte: [{ variable: "SCORE" }, { baseValue: 1, baseType: "float" }],
+        },
+        then: [
+          {
+            setOutcomeValue: "FEEDBACK",
+            value: { baseValue: "correct", baseType: "identifier" },
+          },
+        ],
+      },
+    ],
+  },
+]);
+item.addModalFeedback({
+  identifier: "correct",
+  outcomeIdentifier: "FEEDBACK",
+  html: "<p>Well done!</p>",
+});
+```
+
+Parsing reads both back with `item.getModalFeedbacks()` and `item.getResponseRules()`.
+Response processing that uses anything the rule model doesn't cover isn't read at all.
+
 ## Development
 
 ```bash
